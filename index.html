@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Enterprise Suite – App Empresarial (LocalStorage)</title>
+<style>
+:root{
+  --bg:#0b1221;--card:#0f172a;--line:#1f2a44;--fg:#e5e7eb;--muted:#9ca3af;
+  --accent:#22d3ee;--ok:#34d399;--warn:#f59e0b;--danger:#ef4444;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
+a{color:inherit} input,select,button,textarea{font:inherit}
+
+/* Layout */
+.app{display:grid;grid-template-columns:260px 1fr;min-height:100vh;transition:all .2s}
+.app.collapsed{grid-template-columns:1fr}
+.app.collapsed .sidebar{display:none}
+/* MODO MENÚ: la sidebar solo muestra el botón Menú principal */
+.app.menu-mode .nav button:not([data-view="menu"]){display:none}
+
+.sidebar{background:linear-gradient(180deg,#0e162a,#0b1221);border-right:1px solid var(--line);padding:18px 14px}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.logo .mark{width:34px;height:34px;border-radius:10px;background:conic-gradient(from 140deg, var(--accent), transparent 60%),linear-gradient(180deg,rgba(255,255,255,.15),rgba(255,255,255,.05));border:1px solid rgba(255,255,255,.15)}
+.logo h1{font-size:18px;margin:0} .small{color:var(--muted);font-weight:400}
+
+.nav{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.nav button{all:unset;display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:10px;cursor:pointer;border:1px solid transparent}
+.nav button:hover{background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.07)}
+.nav button.active{background:rgba(34,211,238,.12);border-color:rgba(34,211,238,.35);color:#99f6e4}
+
+.main{display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0d1426,#0b1221);gap:10px}
+.kpis{display:flex;gap:10px;flex-wrap:wrap}
+.kpi{background:rgba(255,255,255,.04);border:1px solid var(--line);padding:10px 12px;border-radius:12px;min-width:140px}
+.kpi .label{font-size:12px;color:var(--muted)} .kpi .val{font-weight:700}
+.content{padding:18px;display:grid;gap:14px}
+.card{background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.03));border:1px solid var(--line);border-radius:14px;padding:16px}
+.card h2{margin:0 0 10px;font-size:18px}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+input[type="text"],input[type="number"],input[type="date"],input[type="datetime-local"],select,textarea{
+  background:#0a1120;border:1px solid var(--line);border-radius:10px;color:var(--fg);padding:10px;min-width:120px
+}
+textarea{min-height:80px;width:100%}
+button.btn{background:#13203a;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer}
+button.btn:hover{background:#162549}
+.btn.ok{border-color:rgba(52,211,153,.5)} .btn.warn{border-color:rgba(245,158,11,.5)} .btn.danger{border-color:rgba(239,68,68,.6)}
+.btn.back{background:#0a1327}
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{border-bottom:1px solid var(--line);padding:10px;font-size:14px;vertical-align:top}
+.table th{color:var(--muted);text-align:left} .right{text-align:right}
+.badge{padding:2px 7px;border-radius:999px;border:1px solid var(--line);font-size:12px}
+.badge.ok{color:var(--ok);border-color:rgba(52,211,153,.5);background:rgba(52,211,153,.12)}
+.badge.danger{color:#fda4af;border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.08)}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+footer.foot{padding:12px 18px;border-top:1px solid var(--line);color:var(--muted);text-align:center}
+hr.sep{border:0;border-top:1px solid var(--line);margin:10px 0} .notice{font-size:12px;color:var(--muted)}
+
+/* LOGIN */
+.login{max-width:420px;margin:7vh auto;padding:20px}
+.login .brand{display:flex;align-items:center;gap:12px;justify-content:center;margin-bottom:12px}
+.login h1{margin:0}
+.login .box{background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.03));border:1px solid var(--line);border-radius:14px;padding:16px}
+.hl{color:#99f6e4} .hide{display:none}
+
+/* Menú principal (tarjetas) */
+.menu-grid{display:grid;gap:12px}
+@media(min-width:860px){.menu-grid{grid-template-columns:repeat(3,1fr)}}
+.menu-card{cursor:pointer;padding:16px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02))}
+.menu-card:hover{outline:1px solid rgba(34,211,238,.35)}
+</style>
+</head>
+<body>
+
+<!-- LOGIN / PRIMER USO -->
+<section id="auth" class="login">
+  <div class="brand">
+    <div class="mark" style="width:34px;height:34px;border-radius:10px;background:conic-gradient(from 140deg, var(--accent), transparent 60%),linear-gradient(180deg,rgba(255,255,255,.15),rgba(255,255,255,.05));border:1px solid rgba(255,255,255,.15)"></div>
+    <h1>Enterprise <span class="small">Suite</span></h1>
+  </div>
+  <div id="setup" class="box">
+    <h2>Configuración inicial</h2>
+    <p class="notice">Crea tu <b>usuario administrador</b>. Se guarda cifrado localmente.</p>
+    <div class="row">
+      <input id="setup-user" type="text" placeholder="Usuario administrador" />
+      <input id="setup-pass" type="password" placeholder="Contraseña" />
+      <button class="btn ok" id="setup-save">Guardar y entrar</button>
+    </div>
+  </div>
+
+  <div id="login" class="box hide">
+    <h2>Acceso</h2>
+    <div class="row">
+      <input id="login-user" type="text" placeholder="Usuario" />
+      <input id="login-pass" type="password" placeholder="Contraseña" />
+      <button class="btn" id="login-btn">Entrar</button>
+    </div>
+  </div>
+</section>
+
+<!-- APP -->
+<section id="app" class="app hide">
+  <aside class="sidebar">
+    <div class="logo"><div class="mark" style="width:34px;height:34px;border-radius:10px;background:conic-gradient(from 140deg, var(--accent), transparent 60%),linear-gradient(180deg,rgba(255,255,255,.15),rgba(255,255,255,.05));border:1px solid rgba(255,255,255,.15)"></div><h1>Enterprise <span class="small">Suite</span></h1></div>
+    <div class="nav">
+      <button data-view="menu" class="active">🏠 Menú principal</button>
+      <!-- El resto de botones quedan ocultos en modo menú gracias a .app.menu-mode -->
+      <button data-view="dashboard">📊 Dashboard</button>
+      <button data-view="clientes">👥 Clientes</button>
+      <button data-view="cotizaciones">📝 Cotizaciones</button>
+      <button data-view="facturacion">💸 Facturación</button>
+      <button data-view="inventario">📦 Inventario</button>
+      <button data-view="proyectos">✅ Proyectos/Tareas</button>
+      <button data-view="llamadas">📞 Llamadas</button>
+      <button data-view="agenda">🗓️ Agenda</button>
+      <button data-view="gastos">💼 Gastos</button>
+      <button data-view="reportes">📈 Reportes</button>
+      <button data-view="config">⚙️ Configuración</button>
+      <button data-view="seguridad">🔒 Seguridad</button>
+      <button id="logout">⤬ Cerrar sesión</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="row" style="gap:8px;align-items:center">
+        <button id="backBtn" class="btn back hide">← Volver al menú principal</button>
+        <div class="kpis" id="kpis"></div>
+      </div>
+      <div class="row"><span class="notice" id="companyName">Empresa</span></div>
+    </div>
+    <div class="content" id="view"></div>
+    <footer class="foot">Datos guardados localmente con <code>localStorage</code>. Exporta/Importa en Configuración.</footer>
+  </main>
+</section>
+
+<!-- Librerías PDF -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+<script>
+/* ===== Estado / util ===== */
+const SKEY='enterprise-suite/v1',UKEY='enterprise-suite/users',CFG='enterprise-suite/config';
+const $=s=>document.querySelector(s), uid=()=>crypto.randomUUID();
+let state = load()||{ clientes:[],cotizaciones:[],facturas:[],inventario:[],proyectos:[],llamadas:[],gastos:[],config:{company:'Mi Empresa',currency:'USD',locale:'es-ES',tax:0.18,whatsappCode:'1'} };
+function load(){ try{return JSON.parse(localStorage.getItem(SKEY));}catch{return null;} }
+function save(){ localStorage.setItem(SKEY,JSON.stringify(state)); renderKPIs(); }
+function saveCfg(){ localStorage.setItem(CFG, JSON.stringify(state.config)); }
+function loadCfg(){ try{const c=JSON.parse(localStorage.getItem(CFG)); if(c) state.config=c;}catch{} }
+const moneyFmt=(n,c=state.config.currency||'USD',l=state.config.locale||'es-ES')=>new Intl.NumberFormat(l,{style:'currency',currency:c}).format(n);
+function hash(str){ const enc=new TextEncoder().encode(str); return crypto.subtle.digest('SHA-256',enc).then(b=>Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('')) }
+function linkWA(number,text){ return `https://wa.me/${number}?text=${encodeURIComponent(text||'Hola')}`; }
+function calURL({title,details,location,startISO,endISO}){ const f=s=>s.replace(/[-:]/g,'').replace('.000','').slice(0,15)+'Z'; return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&details=${encodeURIComponent(details||'')}&location=${encodeURIComponent(location||'')}&dates=${f(startISO)}/${f(endISO)}`; }
+
+/* ===== Login / Setup ===== */
+async function ensureSetup(){
+  const users=JSON.parse(localStorage.getItem(UKEY)||'[]');
+  if(users.length===0){ $('#setup').classList.remove('hide'); $('#login').classList.add('hide');}
+  else { $('#setup').classList.add('hide'); $('#login').classList.remove('hide');}
+}
+$('#setup-save').onclick=async()=>{
+  const u=$('#setup-user').value.trim(), p=$('#setup-pass').value;
+  if(!u||!p) return alert('Usuario y contraseña requeridos');
+  const passhash=await hash(p);
+  localStorage.setItem(UKEY, JSON.stringify([{id:uid(),user:u,pass:passhash,role:'admin'}]));
+  alert('Administrador creado. Inicia sesión.'); ensureSetup();
+};
+$('#login-btn').onclick=async()=>{
+  const u=$('#login-user').value.trim(), p=$('#login-pass').value;
+  const users=JSON.parse(localStorage.getItem(UKEY)||'[]');
+  const found=users.find(x=>x.user===u); if(!found) return alert('Credenciales inválidas');
+  const passhash=await hash(p); if(passhash!==found.pass) return alert('Credenciales inválidas');
+  sessionStorage.setItem('es_session', JSON.stringify({uid:found.id,user:found.user,role:found.role,ts:Date.now()}));
+  $('#auth').classList.add('hide'); $('#app').classList.remove('hide'); bootApp();
+};
+$('#logout').onclick=()=>{sessionStorage.removeItem('es_session'); location.reload();};
+
+/* ===== Navegación “página” + MODO MENÚ ===== */
+const view=$('#view'), backBtn=$('#backBtn'), appEl=$('#app');
+function setNav(v){ document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v)); }
+function enterMenu(){ appEl.classList.remove('collapsed'); appEl.classList.add('menu-mode'); backBtn.classList.add('hide'); setNav('menu'); routes.menu(); }
+function enterModule(v){ appEl.classList.add('collapsed'); appEl.classList.remove('menu-mode'); backBtn.classList.remove('hide'); setNav(v); routes[v](); }
+backBtn.onclick=enterMenu;
+document.querySelectorAll('.nav button[data-view]').forEach(b=>{
+  b.onclick=()=>{ const v=b.dataset.view; if(v==='menu') enterMenu(); else enterModule(v); }
+});
+
+/* ===== KPIs / boot ===== */
+function renderKPIs(){
+  const k=$('#kpis');
+  const totalFact=state.facturas.reduce((a,f)=>a+Number(f.total||0),0);
+  const totalGasto=state.gastos.reduce((a,g)=>a+Number(g.monto||0),0);
+  const balance=totalFact-totalGasto;
+  k.innerHTML=`<div class="kpi"><div class="label">Facturado</div><div class="val">${moneyFmt(totalFact)}</div></div>
+  <div class="kpi"><div class="label">Gastos</div><div class="val">${moneyFmt(totalGasto)}</div></div>
+  <div class="kpi"><div class="label">Balance</div><div class="val">${moneyFmt(balance)}</div></div>`;
+}
+function bootApp(){ loadCfg(); $('#companyName').textContent=state.config.company||'Empresa'; renderKPIs(); enterMenu(); }
+
+/* ===== PDF / backup ===== */
+function exportPDF(sel,title='Reporte'){ const el=document.querySelector(sel); if(!el) return;
+  html2canvas(el,{scale:2,backgroundColor:'#0b1221'}).then(cv=>{ const img=cv.toDataURL('image/png'); const pdf=new jspdf.jsPDF('p','mm','a4'); const w=pdf.internal.pageSize.getWidth()-20; const h=(cv.height/cv.width)*w; pdf.text(title,10,10); pdf.addImage(img,'PNG',10,16,w,h); pdf.save(title.replace(/\s+/g,'_')+'.pdf'); });
+}
+function backupJSON(){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(state,null,2)],{type:'application/json'})); a.download='enterprise-suite-backup.json'; a.click(); URL.revokeObjectURL(a.href);}
+function restoreJSON(file){ const fr=new FileReader(); fr.onload=()=>{ try{ const data=JSON.parse(fr.result); if(confirm('Reemplazar datos actuales?')){ state=data; save(); bootApp(); } }catch{alert('Archivo inválido');} }; fr.readAsText(file); }
+
+/* ===== Rutas ===== */
+const routes={
+  menu(){
+    view.innerHTML=`
+      <div class="card">
+        <h2>Menú principal</h2>
+        <p class="notice">Elige un módulo. Cada módulo abre su propia “página” y podrás regresar con el botón ← de arriba.</p>
+        <div class="menu-grid" id="menuGrid"></div>
+      </div>`;
+    const items=[
+      {v:'dashboard',t:'📊 Dashboard'},
+      {v:'clientes',t:'👥 Clientes'},
+      {v:'cotizaciones',t:'📝 Cotizaciones'},
+      {v:'facturacion',t:'💸 Facturación'},
+      {v:'inventario',t:'📦 Inventario'},
+      {v:'proyectos',t:'✅ Proyectos/Tareas'},
+      {v:'llamadas',t:'📞 Llamadas'},
+      {v:'agenda',t:'🗓️ Agenda'},
+      {v:'gastos',t:'💼 Gastos'},
+      {v:'reportes',t:'📈 Reportes'},
+      {v:'config',t:'⚙️ Configuración'},
+      {v:'seguridad',t:'🔒 Seguridad'}
+    ];
+    const grid=$('#menuGrid');
+    items.forEach(it=>{
+      const d=document.createElement('div');
+      d.className='menu-card';
+      d.innerHTML=`<b>${it.t}</b><div class="notice">Abrir ${it.t.replace(/^[^ ]+ /,'')}</div>`;
+      d.onclick=()=>enterModule(it.v);
+      grid.appendChild(d);
+    });
+  },
+
+  dashboard(){
+    view.innerHTML=`<div class="card">
+      <h2>Resumen</h2>
+      <div class="toolbar"><button class="btn ok" onclick="exportPDF('#dashArea','Dashboard')">Exportar PDF</button></div>
+      <div id="dashArea">
+        <div class="row">
+          <div class="kpi"><div class="label">Clientes</div><div class="val">${state.clientes.length}</div></div>
+          <div class="kpi"><div class="label">Cotizaciones</div><div class="val">${state.cotizaciones.length}</div></div>
+          <div class="kpi"><div class="label">Facturas</div><div class="val">${state.facturas.length}</div></div>
+          <div class="kpi"><div class="label">Proyectos</div><div class="val">${state.proyectos.length}</div></div>
+          <div class="kpi"><div class="label">Inventario</div><div class="val">${state.inventario.length}</div></div>
+        </div>
+      </div>
+    </div>`;
+  },
+
+  clientes(){
+    view.innerHTML=`<div class="card">
+      <h2>Clientes</h2>
+      <div class="toolbar">
+        <input id="c-buscar" type="text" placeholder="Buscar cliente..."/>
+        <button class="btn ok" id="c-add">Nuevo</button>
+        <button class="btn" onclick="exportPDF('#clientesTable','Clientes')">Exportar PDF</button>
+      </div>
+      <div id="clientesTable"><table class="table">
+        <thead><tr><th>Nombre</th><th>Contacto</th><th>Notas</th><th></th></tr></thead>
+        <tbody id="c-body"></tbody></table></div></div>`;
+    const body=$('#c-body');
+    const draw=()=>{
+      const term=($('#c-buscar').value||'').toLowerCase(); body.innerHTML='';
+      state.clientes.filter(c=>c.nombre.toLowerCase().includes(term)||(c.email||'').toLowerCase().includes(term)).forEach(c=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td><b>${c.nombre}</b><div class="notice">${c.empresa||''}</div></td>
+        <td><div>${c.email||''}</div><div>${c.tel||''}</div>
+          <div class="row">
+            ${c.tel? `<a class="btn" target="_blank" href="${linkWA((state.config.whatsappCode||'1')+c.tel,'Hola '+c.nombre)}">WhatsApp</a>`:''}
+            ${c.tel? `<a class="btn" href="tel:${c.tel}">Llamar</a>`:''}
+            ${c.email? `<a class="btn" href="mailto:${c.email}">Email</a>`:''}
+          </div></td>
+        <td>${c.notas||''}</td>
+        <td class="right"><button class="btn" data-edit="${c.id}">Editar</button>
+            <button class="btn danger" data-del="${c.id}">Eliminar</button></td>`;
+        body.appendChild(tr);
+      });
+    };
+    $('#c-buscar').oninput=draw;
+    $('#c-add').onclick=()=>{ const nombre=prompt('Nombre'); if(!nombre) return;
+      const empresa=prompt('Empresa')||'', email=prompt('Email')||'', tel=prompt('Teléfono')||'', notas=prompt('Notas')||'';
+      state.clientes.unshift({id:uid(),nombre,empresa,email,tel,notas}); save(); draw(); };
+    body.onclick=e=>{
+      const id=e.target.dataset.del||e.target.dataset.edit; if(!id) return;
+      if(e.target.dataset.del){ if(confirm('¿Eliminar cliente?')){ state.clientes=state.clientes.filter(x=>x.id!==id); save(); draw(); } }
+      else{ const c=state.clientes.find(x=>x.id===id);
+        const nombre=prompt('Nombre',c.nombre)||c.nombre, empresa=prompt('Empresa',c.empresa||'')||'';
+        const email=prompt('Email',c.email||'')||'', tel=prompt('Teléfono',c.tel||'')||'', notas=prompt('Notas',c.notas||'')||'';
+        Object.assign(c,{nombre,empresa,email,tel,notas}); save(); draw();
+      }
+    };
+    draw();
+  },
+
+  cotizaciones(){
+    view.innerHTML=`<div class="card">
+      <h2>Cotizaciones</h2>
+      <div class="toolbar"><button class="btn ok" id="q-add">Nueva</button><button class="btn" onclick="exportPDF('#q-area','Cotizaciones')">Exportar PDF</button></div>
+      <div id="q-area"><table class="table"><thead><tr><th>#</th><th>Cliente</th><th>Concepto</th><th class="right">Subtotal</th><th class="right">Impuestos</th><th class="right">Total</th><th></th></tr></thead><tbody id="q-body"></tbody></table></div></div>`;
+    const body=$('#q-body');
+    const draw=()=>{ body.innerHTML=''; state.cotizaciones.forEach(q=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${q.codigo}</td><td>${q.cliente}</td><td>${q.concepto}</td>
+      <td class="right">${moneyFmt(q.subtotal)}</td><td class="right">${moneyFmt(q.tax)}</td>
+      <td class="right"><b>${moneyFmt(q.total)}</b></td>
+      <td class="right"><button class="btn" data-invoice="${q.id}">Facturar</button>
+      <button class="btn" data-edit="${q.id}">Editar</button>
+      <button class="btn danger" data-del="${q.id}">Eliminar</button></td>`;
+      body.appendChild(tr); }); };
+    $('#q-add').onclick=()=>{ const codigo='Q-'+Math.floor(Math.random()*9999).toString().padStart(4,'0');
+      const cliente=prompt('Cliente')||'', concepto=prompt('Concepto')||'', subtotal=Number(prompt('Subtotal','0'))||0;
+      const tax=+(subtotal*(state.config.tax||0)).toFixed(2), total=subtotal+tax;
+      state.cotizaciones.unshift({id:uid(),codigo,cliente,concepto,subtotal,tax,total,fecha:new Date().toISOString()}); save(); draw(); };
+    body.onclick=e=>{
+      const id=e.target.dataset.del||e.target.dataset.edit||e.target.dataset.invoice; if(!id) return;
+      if(e.target.dataset.del){ if(confirm('¿Eliminar cotización?')){ state.cotizaciones=state.cotizaciones.filter(x=>x.id!==id); save(); draw(); } }
+      else if(e.target.dataset.edit){ const q=state.cotizaciones.find(x=>x.id===id);
+        const cliente=prompt('Cliente',q.cliente)||q.cliente, concepto=prompt('Concepto',q.concepto)||q.concepto;
+        const subtotal=Number(prompt('Subtotal',q.subtotal))||q.subtotal, tax=+(subtotal*(state.config.tax||0)).toFixed(2), total=subtotal+tax;
+        Object.assign(q,{cliente,concepto,subtotal,tax,total}); save(); draw();
+      } else { const q=state.cotizaciones.find(x=>x.id===id);
+        state.facturas.unshift({id:uid(),numero:'F-'+Date.now(),cliente:q.cliente,concepto:q.concepto,subtotal:q.subtotal,tax:q.tax,total:q.total,pagada:false,fecha:new Date().toISOString()});
+        save(); alert('Factura creada.'); }
+    }; draw();
+  },
+
+  facturacion(){
+    view.innerHTML=`<div class="card">
+      <h2>Facturación</h2>
+      <div class="toolbar"><button class="btn ok" id="f-add">Nueva factura</button><button class="btn" onclick="exportPDF('#f-area','Facturacion')">Exportar PDF</button></div>
+      <div id="f-area"><table class="table"><thead><tr><th>#</th><th>Cliente</th><th>Concepto</th><th class="right">Subtotal</th><th class="right">Impuestos</th><th class="right">Total</th><th>Estado</th><th></th></tr></thead><tbody id="f-body"></tbody></table></div></div>`;
+    const body=$('#f-body');
+    const draw=()=>{ body.innerHTML=''; state.facturas.forEach(f=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${f.numero}</td><td>${f.cliente}</td><td>${f.concepto}</td>
+      <td class="right">${moneyFmt(f.subtotal)}</td><td class="right">${moneyFmt(f.tax)}</td>
+      <td class="right"><b>${moneyFmt(f.total)}</b></td><td>${f.pagada?'<span class="badge ok">Pagada</span>':'<span class="badge danger">Pendiente</span>'}</td>
+      <td class="right"><button class="btn" data-paid="${f.id}">${f.pagada?'Pendiente':'Pagada'}</button>
+      <button class="btn" data-edit="${f.id}">Editar</button><button class="btn danger" data-del="${f.id}">Eliminar</button></td>`;
+      body.appendChild(tr); }); };
+    $('#f-add').onclick=()=>{ const numero='F-'+Math.floor(Math.random()*999999).toString().padStart(6,'0');
+      const cliente=prompt('Cliente')||'', concepto=prompt('Concepto')||'', subtotal=Number(prompt('Subtotal','0'))||0;
+      const tax=+(subtotal*(state.config.tax||0)).toFixed(2), total=subtotal+tax;
+      state.facturas.unshift({id:uid(),numero,cliente,concepto,subtotal,tax,total,pagada:false,fecha:new Date().toISOString()}); save(); draw(); renderKPIs(); };
+    body.onclick=e=>{
+      const id=e.target.dataset.del||e.target.dataset.edit||e.target.dataset.paid; if(!id) return;
+      if(e.target.dataset.del){ if(confirm('¿Eliminar factura?')){ state.facturas=state.facturas.filter(x=>x.id!==id); save(); draw(); renderKPIs(); } }
+      else if(e.target.dataset.edit){ const f=state.facturas.find(x=>x.id===id);
+        const cliente=prompt('Cliente',f.cliente)||f.cliente, concepto=prompt('Concepto',f.concepto)||f.concepto;
+        const subtotal=Number(prompt('Subtotal',f.subtotal))||f.subtotal, tax=+(subtotal*(state.config.tax||0)).toFixed(2), total=subtotal+tax;
+        Object.assign(f,{cliente,concepto,subtotal,tax,total}); save(); draw(); renderKPIs();
+      } else { const f=state.facturas.find(x=>x.id===id); f.pagada=!f.pagada; save(); draw(); renderKPIs(); }
+    }; draw();
+  },
+
+  inventario(){
+    view.innerHTML=`<div class="card"><h2>Inventario</h2>
+      <div class="toolbar"><button class="btn ok" id="i-add">Nuevo ítem</button><button class="btn" onclick="exportPDF('#i-area','Inventario')">Exportar PDF</button></div>
+      <div id="i-area"><table class="table"><thead><tr><th>Producto</th><th>SKU</th><th>Stock</th><th class="right">Costo</th><th class="right">Precio</th><th></th></tr></thead><tbody id="i-body"></tbody></table></div></div>`;
+    const body=$('#i-body');
+    const draw=()=>{ body.innerHTML=''; state.inventario.forEach(p=>{
+      const tr=document.createElement('tr'); tr.innerHTML=`<td>${p.nombre}</td><td>${p.sku}</td><td>${p.stock}</td>
+      <td class="right">${moneyFmt(p.costo||0)}</td><td class="right">${moneyFmt(p.precio||0)}</td>
+      <td class="right"><button class="btn" data-add="${p.id}">+1</button><button class="btn" data-sub="${p.id}">-1</button>
+      <button class="btn" data-edit="${p.id}">Editar</button><button class="btn danger" data-del="${p.id}">Eliminar</button></td>`; body.appendChild(tr); }); };
+    $('#i-add').onclick=()=>{ const nombre=prompt('Nombre del producto')||'', sku=prompt('SKU')||'', stock=Number(prompt('Stock','0'))||0, costo=Number(prompt('Costo','0'))||0, precio=Number(prompt('Precio','0'))||0;
+      state.inventario.unshift({id:uid(),nombre,sku,stock,costo,precio}); save(); draw(); };
+    body.onclick=e=>{
+      const id=e.target.dataset.del||e.target.dataset.edit||e.target.dataset.add||e.target.dataset.sub; if(!id) return;
+      const p=state.inventario.find(x=>x.id===id);
+      if(e.target.dataset.del){ if(confirm('¿Eliminar producto?')){ state.inventario=state.inventario.filter(x=>x.id!==id); save(); draw(); } }
+      else if(e.target.dataset.edit){ const nombre=prompt('Nombre',p.nombre)||p.nombre, sku=prompt('SKU',p.sku)||p.sku, stock=Number(prompt('Stock',p.stock))||p.stock, costo=Number(prompt('Costo',p.costo))||p.costo, precio=Number(prompt('Precio',p.precio))||p.precio; Object.assign(p,{nombre,sku,stock,costo,precio}); save(); draw(); }
+      else if(e.target.dataset.add){ p.stock++; save(); draw(); }
+      else if(e.target.dataset.sub){ p.stock=Math.max(0,p.stock-1); save(); draw(); }
+    }; draw();
+  },
+
+  proyectos(){
+    view.innerHTML=`<div class="card"><h2>Proyectos / Tareas</h2>
+      <div class="toolbar"><button class="btn ok" id="p-add">Nuevo</button><button class="btn" onclick="exportPDF('#p-area','Proyectos')">Exportar PDF</button></div>
+      <div id="p-area"><table class="table"><thead><tr><th>Nombre</th><th>Estado</th><th>Vence</th><th>Notas</th><th></th></tr></thead><tbody id="p-body"></tbody></table></div></div>`;
+    const body=$('#p-body'); const draw=()=>{ body.innerHTML=''; state.proyectos.forEach(p=>{
+      const tr=document.createElement('tr'); tr.innerHTML=`<td>${p.nombre}</td><td>${p.estado}</td><td>${p.vence?new Date(p.vence).toLocaleDateString():''}</td><td>${p.notas||''}</td>
+      <td class="right"><a class="btn" target="_blank" href="${calURL({title:p.nombre,details:p.notas||'',location:'',startISO:p.vence||new Date().toISOString(),endISO:p.vence||new Date(Date.now()+3600000).toISOString()})}">Google Calendar</a>
+      <button class="btn" data-done="${p.id}">Completar</button><button class="btn" data-edit="${p.id}">Editar</button><button class="btn danger" data-del="${p.id}">Eliminar</button></td>`; body.appendChild(tr); }); };
+    $('#p-add').onclick=()=>{ const nombre=prompt('Nombre')||'', estado='En progreso', vence=prompt('Fecha límite (YYYY-MM-DD)')||'', notas=prompt('Notas')||''; state.proyectos.unshift({id:uid(),nombre,estado,vence,notas}); save(); draw(); };
+    body.onclick=e=>{
+      const id=e.target.dataset.del||e.target.dataset.edit||e.target.dataset.done; if(!id) return;
+      if(e.target.dataset.del){ if(confirm('¿Eliminar?')){ state.proyectos=state.proyectos.filter(x=>x.id!==id); save(); draw(); } }
+      else if(e.target.dataset.edit){ const p=state.proyectos.find(x=>x.id===id); const nombre=prompt('Nombre',p.nombre)||p.nombre, estado=prompt('Estado',p.estado)||p.estado, vence=prompt('YYYY-MM-DD',p.vence||'')||p.vence, notas=prompt('Notas',p.notas||'')||p.notas; Object.assign(p,{nombre,estado,vence,notas}); save(); draw(); }
+      else { const p=state.proyectos.find(x=>x.id===id); p.estado='Completado'; save(); draw(); }
+    }; draw();
+  },
+
+  llamadas(){
+    view.innerHTML=`<div class="card"><h2>Llamadas / Seguimiento</h2>
+      <div class="toolbar"><button class="btn ok" id="l-add">Registrar llamada</button><button class="btn" onclick="exportPDF('#l-area','Llamadas')">Exportar PDF</button></div>
+      <div id="l-area"><table class="table"><thead><tr><th>Cliente</th><th>Teléfono</th><th>Fecha</th><th>Resumen</th><th></th></tr></thead><tbody id="l-body"></tbody></table></div></div>`;
+    const body=$('#l-body'); const draw=()=>{ body.innerHTML=''; state.llamadas.forEach(l=>{
+      const tr=document.createElement('tr'); tr.innerHTML=`<td>${l.cliente}</td><td>${l.tel||''}</td><td>${new Date(l.fecha).toLocaleString()}</td><td>${l.resumen||''}</td>
+      <td class="right">${l.tel? `<a class="btn" href="tel:${l.tel}">Llamar</a>`:''} ${l.tel? `<a class="btn" target="_blank" href="${linkWA((state.config.whatsappCode||'1')+l.tel,'Hola '+l.cliente)}">WhatsApp</a>`:''} <button class="btn danger" data-del="${l.id}">Eliminar</button></td>`; body.appendChild(tr); }); };
+    $('#l-add').onclick=()=>{ const cliente=prompt('Cliente')||'', tel=prompt('Teléfono')||'', resumen=prompt('Resumen')||''; state.llamadas.unshift({id:uid(),cliente,tel,resumen,fecha:new Date().toISOString()}); save(); draw(); };
+    body.onclick=e=>{ const id=e.target.dataset.del; if(!id) return; if(confirm('¿Eliminar registro?')){ state.llamadas=state.llamadas.filter(x=>x.id!==id); save(); draw(); } }; draw();
+  },
+
+  agenda(){
+    view.innerHTML=`<div class="card"><h2>Agenda / Google Calendar</h2>
+      <div class="row"><input id="a-titulo" type="text" placeholder="Título del evento"/><input id="a-inicio" type="datetime-local"/><input id="a-fin" type="datetime-local"/><input id="a-lugar" type="text" placeholder="Lugar (opcional)"/><input id="a-det" type="text" placeholder="Detalles (opcional)"/><a id="a-link" target="_blank" class="btn ok">Crear en Google Calendar</a></div>
+      <p class="notice">Abre una pestaña con el evento prellenado.</p></div>`;
+    const upd=()=>{ const t=$('#a-titulo').value||'Evento', s=$('#a-inicio').value?new Date($('#a-inicio').value).toISOString():new Date().toISOString(), e=$('#a-fin').value?new Date($('#a-fin').value).toISOString():new Date(Date.now()+3600000).toISOString(), d=$('#a-det').value||'', l=$('#a-lugar').value||''; $('#a-link').href=calURL({title:t,details:d,location:l,startISO:s,endISO:e}); };
+    ['a-titulo','a-inicio','a-fin','a-det','a-lugar'].forEach(id=>$('#'+id).oninput=upd); upd();
+  },
+
+  gastos(){
+    view.innerHTML=`<div class="card"><h2>Gastos</h2>
+      <div class="toolbar"><button class="btn ok" id="g-add">Nuevo gasto</button><button class="btn" onclick="exportPDF('#g-area','Gastos')">Exportar PDF</button></div>
+      <div id="g-area"><table class="table"><thead><tr><th>Concepto</th><th class="right">Monto</th><th>Fecha</th><th></th></tr></thead><tbody id="g-body"></tbody></table></div></div>`;
+    const body=$('#g-body'); const draw=()=>{ body.innerHTML=''; state.gastos.forEach(g=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${g.concepto}</td><td class="right">${moneyFmt(g.monto)}</td><td>${new Date(g.fecha).toLocaleDateString()}</td><td class="right"><button class="btn danger" data-del="${g.id}">Eliminar</button></td>`; body.appendChild(tr); }); renderKPIs(); };
+    $('#g-add').onclick=()=>{ const concepto=prompt('Concepto')||'', monto=Number(prompt('Monto','0'))||0; state.gastos.unshift({id:uid(),concepto,monto,fecha:new Date().toISOString()}); save(); draw(); };
+    body.onclick=e=>{ const id=e.target.dataset.del; if(!id) return; if(confirm('¿Eliminar gasto?')){ state.gastos=state.gastos.filter(x=>x.id!==id); save(); draw(); } }; draw();
+  },
+
+  reportes(){
+    const totalFact=state.facturas.reduce((a,f)=>a+(f.pagada?Number(f.total):0),0);
+    const totalPend=state.facturas.reduce((a,f)=>a+(!f.pagada?Number(f.total):0),0);
+    const totalGasto=state.gastos.reduce((a,g)=>a+Number(g.monto),0);
+    const util=totalFact-totalGasto;
+    view.innerHTML=`<div class="card"><h2>Rendimiento real</h2>
+      <div class="toolbar"><button class="btn" onclick="exportPDF('#r-area','Rendimiento')">Exportar PDF</button></div>
+      <div id="r-area"><div class="row">
+        <div class="kpi"><div class="label">Cobrado</div><div class="val">${moneyFmt(totalFact)}</div></div>
+        <div class="kpi"><div class="label">Pendiente</div><div class="val">${moneyFmt(totalPend)}</div></div>
+        <div class="kpi"><div class="label">Gastos</div><div class="val">${moneyFmt(totalGasto)}</div></div>
+        <div class="kpi"><div class="label">Utilidad</div><div class="val">${moneyFmt(util)}</div></div>
+      </div><hr class="sep"/><p class="notice">Basado en facturas pagadas y todos los gastos.</p></div></div>`;
+  },
+
+  config(){
+    view.innerHTML=`<div class="card"><h2>Configuración</h2>
+      <div class="row">
+        <input id="cfg-name" type="text" placeholder="Nombre de la empresa" value="${state.config.company||''}"/>
+        <select id="cfg-currency">
+          <option ${state.config.currency==='USD'?'selected':''} value="USD">USD</option>
+          <option ${state.config.currency==='EUR'?'selected':''} value="EUR">EUR</option>
+          <option ${state.config.currency==='DOP'?'selected':''} value="DOP">DOP</option>
+          <option ${state.config.currency==='MXN'?'selected':''} value="MXN">MXN</option>
+        </select>
+        <select id="cfg-locale">
+          <option ${state.config.locale==='es-ES'?'selected':''} value="es-ES">es-ES</option>
+          <option ${state.config.locale==='es-MX'?'selected':''} value="es-MX">es-MX</option>
+          <option ${state.config.locale==='es-DO'?'selected':''} value="es-DO">es-DO</option>
+          <option ${state.config.locale==='en-US'?'selected':''} value="en-US">en-US</option>
+        </select>
+        <input id="cfg-tax" type="number" step="0.01" min="0" max="1" value="${state.config.tax||0}"/>
+        <input id="cfg-wa" type="text" placeholder="Código país WhatsApp (ej: 1)" value="${state.config.whatsappCode||'1'}"/>
+        <button class="btn ok" id="cfg-save">Guardar</button>
+      </div>
+      <hr class="sep"/>
+      <div class="row">
+        <button class="btn" id="cfg-backup">Exportar respaldo JSON</button>
+        <label class="btn warn">Importar JSON <input id="cfg-restore" type="file" accept="application/json" hidden></label>
+        <button class="btn danger" id="cfg-wipe">Borrar todo</button>
+      </div></div>`;
+    $('#cfg-save').onclick=()=>{ state.config.company=$('#cfg-name').value||'Mi Empresa'; state.config.currency=$('#cfg-currency').value; state.config.locale=$('#cfg-locale').value; state.config.tax=Number($('#cfg-tax').value)||0; state.config.whatsappCode=$('#cfg-wa').value||'1'; save(); saveCfg(); alert('Configuración guardada'); $('#companyName').textContent=state.config.company; };
+    $('#cfg-backup').onclick=backupJSON;
+    $('#cfg-restore').onchange=e=>{const f=e.target.files?.[0]; if(f) restoreJSON(f);};
+    $('#cfg-wipe').onclick=()=>{ if(confirm('Esto borrará TODO.')){ localStorage.removeItem(SKEY); localStorage.removeItem(CFG); location.reload(); } };
+  },
+
+  seguridad(){
+    view.innerHTML=`<div class="card"><h2>Seguridad</h2>
+      <p class="notice">Usuarios locales (hash SHA-256). Solo visibles en este navegador.</p>
+      <div class="row"><input id="su-user" type="text" placeholder="Nuevo usuario"/><input id="su-pass" type="password" placeholder="Contraseña"/><select id="su-role"><option>admin</option><option>staff</option></select><button class="btn ok" id="su-add">Crear</button></div>
+      <hr class="sep"/>
+      <table class="table"><thead><tr><th>Usuario</th><th>Rol</th><th></th></tr></thead><tbody id="su-body"></tbody></table></div>`;
+    const body=$('#su-body'); const draw=()=>{ const users=JSON.parse(localStorage.getItem(UKEY)||'[]'); body.innerHTML=''; users.forEach(u=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${u.user}</td><td>${u.role}</td><td class="right"><button class="btn danger" data-del="${u.id}">Eliminar</button></td>`; body.appendChild(tr); }); };
+    $('#su-add').onclick=async()=>{ const user=$('#su-user').value.trim(), pass=$('#su-pass').value, role=$('#su-role').value; if(!user||!pass) return alert('Usuario y contraseña requeridos'); const users=JSON.parse(localStorage.getItem(UKEY)||'[]'); if(users.some(x=>x.user===user)) return alert('Ya existe'); users.push({id:uid(),user,pass:await hash(pass),role}); localStorage.setItem(UKEY,JSON.stringify(users)); $('#su-user').value=''; $('#su-pass').value=''; draw(); };
+    body.onclick=e=>{ const id=e.target.dataset.del; if(!id) return; const users=JSON.parse(localStorage.getItem(UKEY)||'[]').filter(x=>x.id!==id); localStorage.setItem(UKEY,JSON.stringify(users)); draw(); }; draw();
+  }
+};
+
+/* ===== Inicio ===== */
+ensureSetup();
+if(sessionStorage.getItem('es_session')){ $('#auth').classList.add('hide'); $('#app').classList.remove('hide'); bootApp(); }
+</script>
+</body>
+</html>
